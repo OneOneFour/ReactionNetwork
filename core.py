@@ -3,6 +3,9 @@ import numpy as np
 from scipy.integrate import odeint
 
 
+def product(x): return reduce(lambda i, j: i * j, x)
+
+
 class Reaction:
     """
     Representation of a single reaction
@@ -11,7 +14,7 @@ class Reaction:
     class ReactionDict(dict):
         def __getitem__(self, item):
             try:
-                return super().__getitem__(item)
+                return int(super().__getitem__(item))
             except KeyError:
                 return 0
 
@@ -50,13 +53,19 @@ class Reaction:
         """
         Returns w as a scalar function f on population vector v
         """
-        return lambda x: self.rate_coefficent * reduce(lambda i, j: i * j, x ** self.reactants.flatten(vars))
+        return lambda x: self.rate_coefficent * product(x ** self.reactants.flatten(vars))
+
+    def w_r_stochastic(self, vars):
+        return lambda x: self.rate_coefficent * product(
+            [np.math.factorial(x[i]) / (np.math.factorial(x[i] - v_i_minus))
+             for
+             i, v_i_minus in enumerate(self.reactants.flatten(vars))])
 
     def s_i(self, var):
         return self.products[var] - self.reactants[var]
 
 
-class ReactionNetwork:
+class DeterministicReactionNetwork:
     """
     Group of individual reactions grouped into a linear algebra problem
     """
@@ -121,8 +130,14 @@ class ReactionNetwork:
         plt.plot(x[:, self.idx(plot_vars[0])], x[:, self.idx(plot_vars[1])])
         plt.show()
 
-    def phase_swatch(self, min,max):
-        
+
+class StochasticReactionNetwork:
+
+    def __init__(self, *reactions):
+        self.reactions = reactions
+
+        # Variables is now an ORDERED list of all variables -> represents order for vectorized calculations
+        self.variables = list(reduce(lambda x, y: x | y, [r.variables for r in reactions]))
 
 
 if __name__ == "__main__":
@@ -130,6 +145,6 @@ if __name__ == "__main__":
     growth_x = Reaction({"X": 1, "Y": 1}, {"X": 2, "Y": 1}, rate_coefficent=1.1)
     death_y = Reaction({"X": 1}, {"X": 0})
     death_x = Reaction({"Y": 1}, {"Y": 0})
-    network = ReactionNetwork(growth_y, death_y, growth_x, death_x)
+    network = DeterministicReactionNetwork(growth_y, death_y, growth_x, death_x)
     network.solve({"X": 1, "Y": 1}, t_min=0, t_max=1, plot=True, plot_var="X")
     network.phase_plot({"X": 0.5, "Y": 1}, t_min=0, t_max=1, plot_vars=["X", "Y"])
